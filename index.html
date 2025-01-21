@@ -20,7 +20,106 @@
                     }.bind(this));
                 },
             });
+
+            let mediaRecorder;
+            let recordedChunks = [];
+
+            // Start recording
+            function startRecording() {
+                const video = document.querySelector('#arjs-video');
+                const canvas = document.querySelector('canvas.a-canvas');
+
+                if (video && canvas) {
+                    // Create a new canvas to combine the video and AR content
+                    const combinedCanvas = document.createElement('canvas');
+                    const ctx = combinedCanvas.getContext('2d');
+                    combinedCanvas.width = video.videoWidth;  // Ensure the canvas matches video width
+                    combinedCanvas.height = video.videoHeight;  // Ensure the canvas matches video height
+
+                    // Create a stream from the new canvas
+                    const stream = combinedCanvas.captureStream(30);  // Capture at 30fps
+                    mediaRecorder = new MediaRecorder(stream);
+
+                    // Collect recorded chunks
+                    mediaRecorder.ondataavailable = function (event) {
+                        recordedChunks.push(event.data);
+                    };
+
+                    // Log when recording stops
+                    mediaRecorder.onstop = function () {
+                        if (recordedChunks.length > 0) {
+                            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = 'combined_video.webm';
+                            link.click();
+                        } else {
+                            console.error("No data recorded.");
+                        }
+                    };
+
+                    mediaRecorder.start(); // Start recording
+
+                    // Draw the video feed and AR canvas content onto the combined canvas
+                    function draw() {
+                        // Draw video feed to combined canvas
+                        ctx.drawImage(video, 0, 0, combinedCanvas.width, combinedCanvas.height);
+                        
+                        // Draw AR canvas content on top of the video feed
+                        ctx.drawImage(canvas, 0, 0, combinedCanvas.width, combinedCanvas.height);
+
+                        // Request the next frame to continue drawing
+                        requestAnimationFrame(draw);
+                    }
+
+                    // Start drawing the video and AR content
+                    draw();
+
+                    document.getElementById('startButton').disabled = true;
+                    document.getElementById('stopButton').disabled = false;
+                } else {
+                    console.error("Video or AR canvas not found!");
+                }
+            }
+
+            // Stop recording with a slight delay to ensure all chunks are captured
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    // Introduce a small delay to capture the last frames
+                    setTimeout(() => {
+                        mediaRecorder.stop(); // Stop the recording manually
+                        document.getElementById('startButton').disabled = false;
+                        document.getElementById('stopButton').disabled = true;
+                    }, 3000); // Delay for 500ms before stopping the recording
+                }
+            }
         </script>
+        <style>
+            /* Style for fixed buttons */
+            .fixed-buttons {
+                position: fixed;
+                bottom: 10px;
+                left: 10px;
+                z-index: 10;
+            }
+
+            .fixed-buttons button {
+                padding: 10px 20px;
+                font-size: 16px;
+                margin: 5px;
+                cursor: pointer;
+                border: none;
+                border-radius: 5px;
+                background-color: #007bff;
+                color: white;
+            }
+
+            .fixed-buttons button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+        </style>
     </head>
 
     <body style="margin: 0; overflow: hidden;">
@@ -64,5 +163,11 @@
 
             <a-entity camera></a-entity>
         </a-scene>
+
+        <!-- Fixed buttons for recording control -->
+        <div class="fixed-buttons">
+            <button id="startButton" onclick="startRecording()">Start Recording</button>
+            <button id="stopButton" onclick="stopRecording()" disabled>Stop Recording</button>
+        </div>
     </body>
 </html>
